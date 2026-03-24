@@ -3,11 +3,11 @@
 
 import { HomeTemplate } from '@/components/templates/HomeTemplate';
 import { HeroSection } from '@/components/organisms/HeroSection';
-import UnderlineLink from '@/components/atoms/links/UnderlineLink';
+import UnderlineLink from '@/components/molecules/Links/UnderlineLink';
 
 export default function HomePage() {
   return (
-    <HomeTemplate 
+    <HomeTemplate
       hero={<HeroSection />}
       footer={
         <>

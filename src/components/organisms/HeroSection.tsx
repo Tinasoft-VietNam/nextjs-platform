@@ -3,7 +3,7 @@ import Logo from '~/svg/Logo.svg';
 // import ArrowLink from '@/components/atoms/links/ArrowLink';
 // import ButtonLink from '@/components/atoms/links/ButtonLink';
 
-import { ArrowLink, ButtonLink} from '@/components/atoms/links';
+import { ArrowLink, ButtonLink } from '@/components/molecules/Links';
 export const HeroSection = () => (
   <>
     <Logo className='w-16' />
