@@ -1,9 +1,8 @@
 'use client'; // Error components must be Client Components
 
 import * as React from 'react';
-import { RiAlarmWarningFill } from 'react-icons/ri';
-
-import TextButton from '@/components/buttons/TextButton';
+import ErrorContent from '@/components/organisms/ErrorContent';
+import { HomeTemplate } from '@/components/templates/HomeTemplate';
 
 export default function Error({
   error,
@@ -18,21 +17,25 @@ export default function Error({
   }, [error]);
 
   return (
-    <main>
-      <section className='bg-white'>
-        <div className='layout flex min-h-screen flex-col items-center justify-center text-center text-black'>
-          <RiAlarmWarningFill
-            size={60}
-            className='drop-shadow-glow animate-flicker text-red-500'
-          />
-          <h1 className='mt-8 text-4xl md:text-6xl'>
-            Oops, something went wrong!
-          </h1>
-          <TextButton variant='basic' onClick={reset} className='mt-4'>
-            Try again
-          </TextButton>
-        </div>
-      </section>
-    </main>
+    <HomeTemplate
+      hero={ <ErrorContent reset={reset} /> }
+      footer={<p>© {new Date().getFullYear()} Your Project</p>}
+    />
+    // <main>
+    //   <section className='bg-white'>
+    //     <div className='layout flex min-h-screen flex-col items-center justify-center text-center text-black'>
+    //       <RiAlarmWarningFill
+    //         size={60}
+    //         className='drop-shadow-glow animate-flicker text-red-500'
+    //       />
+    //       <h1 className='mt-8 text-4xl md:text-6xl'>
+    //         Oops, something went wrong!
+    //       </h1>
+    //       <TextButton variant='basic' onClick={reset} className='mt-4'>
+    //         Try again
+    //       </TextButton>
+    //     </div>
+    //   </section>
+    // </main>
   );
 }
