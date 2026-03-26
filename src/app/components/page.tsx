@@ -14,7 +14,7 @@ import { useComponentTheme } from '@/hooks/useComponentTheme';
 // import { SkeletonSection } from '@/components/organisms/ComponentPage/SkeletonSection';
 
 import { LinkSection, ImageSection, ButtonSection, SkeletonSection } from '@/components/organisms/ComponentPage';
-import UserTableOrganism from '@/components/organisms/UserTable';
+import UserTableOrganism from '@/components/organisms/TablePage/UserTable';
 
 
 export default function ComponentPage() {
@@ -49,12 +49,12 @@ export default function ComponentPage() {
           <ol className='mt-8 space-y-6'>
             <ColorSection {...theme} />
             <LinkSection textColor={theme.textColor} />
-            
+
             <ButtonSection mode={theme.mode} textColor={theme.textColor} />
-            
-            {/*Image*/ }
+
+            {/*Image*/}
             <ImageSection textColor={theme.textColor} />
-            {/*Skeleton*/ }
+            {/*Skeleton*/}
             <SkeletonSection textColor={theme.textColor} />
             <UserTableOrganism />
           </ol>
