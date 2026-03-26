@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useTransition } from 'react';
 import { Table, Tag } from 'antd';
 import type { SorterResult } from 'antd/es/table/interface';
 import type { GetProp, TableProps } from 'antd';
+import { useRouter } from 'next/navigation';
+
 // Import các Molecules
 import TableToolbar from '../../molecules/TableToolbar';
 import ActionButtons from '../../molecules/ActionButton';
@@ -67,8 +69,10 @@ const getRandomuserParams = (params: TableParams) => {
 };
 
 export default function UserTableOrganism() {
+  const router = useRouter();
   const [data, setData] = useState<DataType[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [tableParams, setTableParams] = useState<TableParams>({
     pagination: {
       current: 1,
@@ -100,54 +104,59 @@ export default function UserTableOrganism() {
   const handleDelete = (recordKey: string) => {
     setData(prev => prev.filter(item => item._id !== recordKey));
   };
-  // Cấu hình các cột cho bảng
-  const columns: ColumnsType<DataType> = [
-    {
-      title: 'ID',
-      dataIndex: 'id',
-      key: 'id',
-      className: 'font-medium text-gray-700',
-    },
-    {
-      title: 'Họ và Tên',
-      dataIndex: 'name',
-      key: 'name',
-      className: 'font-medium text-gray-700',
-    },
-    {
-      title: 'Email',
-      dataIndex: 'email',
-      key: 'email',
-    },
-    {
-      title: 'Thành phố',
-      dataIndex: 'city',
-      key: 'city',
-    },
-    {
-      title: 'Hành động',
-      key: 'action',
-      // Nhúng Molecule ActionButtons vào cột này
-      render: (_, record) => (
-        <ActionButtons
-          onEdit={() => handleEdit(record)}
-          onDelete={() => handleDelete(record._id)}
-        />
-      ),
-    },
-  ];
+  // columns of table is re-render when sort so we use useMemo() to control
+  const columns: ColumnsType<DataType> = useMemo(() =>
+    [
+      {
+        title: 'ID',
+        dataIndex: 'id',
+        key: 'id',
+        className: 'font-medium text-gray-700',
+      },
+      {
+        title: 'Họ và Tên',
+        dataIndex: 'name',
+        key: 'name',
+        sorter: true,
+        className: 'font-medium text-gray-700',
+      },
+      {
+        title: 'Email',
+        dataIndex: 'email',
+        sorter: true,
+        key: 'email',
+      },
+      {
+        title: 'Thành phố',
+        dataIndex: 'city',
+        key: 'city',
+      },
+      {
+        title: 'Hành động',
+        key: 'action',
+        // Nhúng Molecule ActionButtons vào cột này
+        render: (_: any, record: DataType) => (
+          <ActionButtons
+            onEdit={() => handleEdit(record)}
+            onDelete={() => handleDelete(record._id)}
+          />
+        ),
+      },
+    ], []);
   const handleTableChange: TableProps<DataType>['onChange'] = (pagination, filters, sorter) => {
-    setTableParams({
-      pagination,
-      filters,
-      sortOrder: Array.isArray(sorter) ? undefined : sorter.order,
-      sortField: Array.isArray(sorter) ? undefined : sorter.field,
-    });
+    startTransition(() => {
+      setTableParams({
+        pagination,
+        filters,
+        sortOrder: Array.isArray(sorter) ? undefined : sorter.order,
+        sortField: Array.isArray(sorter) ? undefined : sorter.field,
+      });
 
-    // `dataSource` is useless since `pageSize` changed
-    if (pagination.pageSize !== tableParams.pagination?.pageSize) {
-      setData([]);
-    }
+      // `dataSource` is useless since `pageSize` changed
+      if (pagination.pageSize !== tableParams.pagination?.pageSize) {
+        setData([]);
+      }
+    });
   };
 
   const params = toURLSearchParams(getRandomuserParams(tableParams));
@@ -165,6 +174,7 @@ export default function UserTableOrganism() {
             total: data.total
           }
         });
+        router.push(`?${params.toString()}`);
         // console.log("Fetched data:", data);
       });
   }
@@ -194,10 +204,10 @@ export default function UserTableOrganism() {
         columns={columns}
         dataSource={data}
         pagination={tableParams.pagination}
-        loading={loading}
+        loading={isPending}
         onChange={handleTableChange}
         className="overflow-hidden"
-        rowKey="_id"
+        rowKey="id"
       />
       <CreateModal isModalCreateOpen={isModalCreateOpen} setIsModalCreateOpen={setIsModalCreateOpen} />
     </div>
