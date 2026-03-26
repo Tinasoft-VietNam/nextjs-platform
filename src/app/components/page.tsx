@@ -1,14 +1,6 @@
 'use client';
 
 import clsx from 'clsx';
-import {
-  ArrowRight,
-  CreditCard,
-  Laptop,
-  Phone,
-  Plus,
-  Shield,
-} from 'lucide-react';
 import React from 'react';
 
 
@@ -22,6 +14,7 @@ import { useComponentTheme } from '@/hooks/useComponentTheme';
 // import { SkeletonSection } from '@/components/organisms/ComponentPage/SkeletonSection';
 
 import { LinkSection, ImageSection, ButtonSection, SkeletonSection } from '@/components/organisms/ComponentPage';
+import UserTableOrganism from '@/components/organisms/UserTable';
 
 
 export default function ComponentPage() {
@@ -63,6 +56,7 @@ export default function ComponentPage() {
             <ImageSection textColor={theme.textColor} />
             {/*Skeleton*/ }
             <SkeletonSection textColor={theme.textColor} />
+            <UserTableOrganism />
           </ol>
         </div>
       </section>
