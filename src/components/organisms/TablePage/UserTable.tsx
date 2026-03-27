@@ -41,6 +41,7 @@ interface TableParams {
   sortField?: SorterResult<any>['field'];
   sortOrder?: SorterResult<any>['order'];
   filters?: Parameters<GetProp<TableProps, 'onChange'>>[1];
+  search?: string;
 }
 
 const toURLSearchParams = <T extends Record<string, any>>(record: T) => {
@@ -79,14 +80,25 @@ export default function UserTableOrganism() {
       pageSize: 10,
     },
   });
-
+  const [searchText, setSearchText] = useState('');
 
   const [isModalCreateOpen, setIsModalCreateOpen] = useState(false);
   // const [isModalEditOpen, setIsModalEditOpen] = useState(false);
   // const [dataEdit, setDataEdit] = useState<DataType | null>(null);
   // Hàm xử lý logic cho Molecules
   const handleSearch = (value: string) => {
-    console.log("Searching for:", value);
+    // console.log("Searching for:", value);
+    // if(searchText === ""){
+    //   setTableParams(prev => ({
+    //     ...prev,
+    //     pagination: {
+    //       ...prev.pagination,
+    //       current: 1
+    //     }
+    //   }));
+    // }
+    setSearchText(value);
+    router.push(`?${params.toString()}&search=${encodeURIComponent(value)}`);
   };
 
 
@@ -150,6 +162,7 @@ export default function UserTableOrganism() {
         filters,
         sortOrder: Array.isArray(sorter) ? undefined : sorter.order,
         sortField: Array.isArray(sorter) ? undefined : sorter.field,
+        search: searchText ,
       });
 
       // `dataSource` is useless since `pageSize` changed
