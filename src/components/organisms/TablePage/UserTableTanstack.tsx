@@ -5,13 +5,15 @@ import { Table } from 'antd';
 import type { SorterResult } from 'antd/es/table/interface';
 import type { GetProp, TableProps } from 'antd';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery, keepPreviousData } from '@tanstack/react-query'; // Import TanStack Query
-
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'; // Import TanStack Query
+import { message, Modal } from 'antd';
+import { fetchUsers, createUser, updateUser, deleteUser } from '@/api/userApi';
 // Import các Molecules
 import TableToolbar from '../../molecules/TableToolbar';
 import ActionButtons from '../../molecules/ActionButton';
 import CreateModal from './CreateModal';
 
+import CreateOrEditModal from '../CreateorEditModal';
 // Định nghĩa kiểu dữ liệu
 type DataType = {
   id: string;
@@ -64,16 +66,12 @@ const getRandomuserParams = (params: TableParams) => {
   return result;
 };
 
-// 1. Tách hàm fetch ra ngoài (queryFn)
-const fetchUsers = async (queryString: string): Promise<ApiResponse<DataType>> => {
-  const response = await fetch(`/api/data?${queryString}`);
-  if (!response.ok) throw new Error('Network response was not ok');
-  return response.json();
-};
 
 export default function UserTableOrganism() {
   const router = useRouter();
-  
+  const queryClient = useQueryClient();
+  const [editingUser, setEditingUser] = useState<DataType | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   // Chỉ giữ lại các state quản lý UI và Params
   const [isPendingUI, startTransition] = useTransition();
   const [tableParams, setTableParams] = useState<TableParams>({
@@ -85,47 +83,77 @@ export default function UserTableOrganism() {
   const [searchText, setSearchText] = useState('');
   const [isModalCreateOpen, setIsModalCreateOpen] = useState(false);
 
-  // Tạo chuỗi query string từ tableParams
+  // search and read query params tu URL de sync voi state
   const queryString = toURLSearchParams(getRandomuserParams(tableParams)).toString();
-
-  // 2. Thay thế useEffect và useState bằng useQuery
-  const { 
-    data: queryData, 
-    isFetching, // Dùng isFetching thay vì isLoading để UI table mượt hơn khi chuyển trang
-  } = useQuery({
-    queryKey: ['users', queryString], // Mỗi khi queryString đổi, API sẽ tự fetch lại
+  const { data: queryData, isFetching } = useQuery({
+    queryKey: ['users', queryString],
     queryFn: () => fetchUsers(queryString),
-    placeholderData: keepPreviousData, // Giữ data cũ trên màn hình trong lúc fetch data mới (tránh chớp bảng)
   });
 
-  const handleSearch = (value: string) => {
-    setSearchText(value);
-    
-    // Reset về trang 1 khi search
-    setTableParams(prev => ({
-      ...prev,
-      search: value,
-      pagination: {
-        ...prev.pagination,
-        current: 1
-      }
-    }));
-    
-    // Cập nhật URL
-    router.push(`?${queryString}&search=${encodeURIComponent(value)}`);
-  };
+  // add new
+  const addMutation = useMutation({
+    mutationFn: createUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] }); // Làm mới bảng
+      message.success('Thêm người dùng thành công!');
+      setIsModalOpen(false);
+    },
+  });
 
-  const handleAddNew = () => setIsModalCreateOpen(true);
+  //edit
+  const updateMutation = useMutation({
+    mutationFn: updateUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      message.success('Cập nhật thành công!');
+      setIsModalOpen(false);
+      setEditingUser(null);
+    },
+  });
+
+  // delete
+  const deleteMutation = useMutation({
+    mutationFn: deleteUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      message.success('Đã xóa người dùng');
+    },
+  });
+
+//   const handleSearch = (value: string) => {
+//     setSearchText(value);
+    
+//     // Reset về trang 1 khi search
+//     setTableParams(prev => ({
+//       ...prev,
+//       search: value,
+//       pagination: {
+//         ...prev.pagination,
+//         current: 1
+//       }
+//     }));
+    
+//     // Cập nhật URL
+//     router.push(`?${queryString}&search=${encodeURIComponent(value)}`);
+//   };
+  const handleSearch = (value: string) => {
+    setTableParams(prev => ({ ...prev, search: value, pagination: { ...prev.pagination, current: 1 } }));
+  };
+  const handleDelete = (id: string) => {
+    Modal.confirm({
+      title: 'Bạn có chắc chắn muốn xóa?',
+      onOk: () => deleteMutation.mutate(id),
+    });
+  };
 
   const handleEdit = (record: DataType) => {
-    console.log("Sửa user:", record.name);
+    setEditingUser(record);
+    setIsModalOpen(true);
   };
 
-  const handleDelete = (recordKey: string) => {
-    // TẠM THỜI: Vẫn để log. 
-    // LƯU Ý: Với TanStack Query, chỗ này bạn nên dùng useMutation để gọi API xóa, 
-    // sau đó gọi queryClient.invalidateQueries({ queryKey: ['users'] }) để bảng tự update.
-    console.log("Cần gọi API xóa ID:", recordKey);
+  const handleAddNew = () => {
+    setEditingUser(null);
+    setIsModalOpen(true);
   };
 
   const columns: ColumnsType<DataType> = useMemo(() => [
@@ -157,9 +185,9 @@ export default function UserTableOrganism() {
       title: 'Hành động',
       key: 'action',
       render: (_: any, record: DataType) => (
-        <ActionButtons
-          onEdit={() => handleEdit(record)}
-          onDelete={() => handleDelete(record.id)}
+        <ActionButtons 
+          onEdit={() => handleEdit(record)} 
+          onDelete={() => handleDelete(record.id)} 
         />
       ),
     },
@@ -189,11 +217,12 @@ export default function UserTableOrganism() {
     <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-200">
       <TableToolbar
         title="Danh sách người dùng"
-        onSearch={handleSearch}
+        onSearch={handleSearch} 
         onAddNew={handleAddNew}
       />
 
       <Table
+        loading={isFetching || deleteMutation.isPending}
         columns={columns}
         // 3. Lấy data trực tiếp từ queryData
         dataSource={queryData?.data || []} 
@@ -203,16 +232,27 @@ export default function UserTableOrganism() {
           total: queryData?.total || 0, 
         }}
         // Dùng isFetching của React Query kết hợp isPending của UI transition
-        loading={isFetching || isPendingUI} 
         onChange={handleTableChange}
         className="overflow-hidden"
         rowKey="id" // Sửa lại thành _id khớp với DataType
       />
       
-      <CreateModal 
-        isModalCreateOpen={isModalCreateOpen} 
-        setIsModalCreateOpen={setIsModalCreateOpen} 
+      <CreateOrEditModal 
+        isOpen={isModalOpen}
+        initialData={editingUser}
+        onCancel={() => setIsModalOpen(false)}
+        isLoading={addMutation.isPending || updateMutation.isPending}
+        onSubmit={(values) => {
+          if (editingUser) {
+            // Nếu có editingUser -> Gọi API Update
+            updateMutation.mutate({ ...values, _id: editingUser.id });
+          } else {
+            // Nếu không có -> Gọi API Create
+            addMutation.mutate(values);
+          }
+        }}
       />
+
     </div>
   );
 }
