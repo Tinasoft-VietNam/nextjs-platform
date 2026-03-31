@@ -10,14 +10,14 @@ const  ActionButton = ({ onEdit, onDelete }: ActionButtonProps)  => {
         <div className="flex items-center space-x-2">
             <Tooltip title="Chỉnh sửa">
                 <Button
-                    type="text"
+                    type="link"
                     icon={<EditOutlined className="text-blue-500" />}
                     onClick={onEdit}
                 />
             </Tooltip>
             <Tooltip title="Xóa">
                 <Button
-                    type="text"
+                    type="link"
                     danger
                     icon={<DeleteOutlined />}
                     onClick={onDelete}

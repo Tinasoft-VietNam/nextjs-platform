@@ -1,258 +1,304 @@
-"use client"; // Bắt buộc trong Next.js App Router khi dùng hooks
+"use client";
 
-import React, { useState, useMemo, useTransition } from 'react';
-import { Table } from 'antd';
-import type { SorterResult } from 'antd/es/table/interface';
-import type { GetProp, TableProps } from 'antd';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'; // Import TanStack Query
-import { message, Modal } from 'antd';
+import React, { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { Modal, Spin, Table, message } from 'antd';
+import type { TableProps } from 'antd';
+import {
+    useInfiniteQuery,
+    useQueryClient,
+    useMutation
+} from '@tanstack/react-query';
+import { useInView } from 'react-intersection-observer';
+
 import { fetchUsers, createUser, updateUser, deleteUser } from '@/api/userApi';
-// Import các Molecules
 import TableToolbar from '../../molecules/TableToolbar';
 import ActionButtons from '../../molecules/ActionButton';
-import CreateModal from './CreateModal';
-
 import CreateOrEditModal from '../CreateorEditModal';
-// Định nghĩa kiểu dữ liệu
+
+// --- TYPES ---
 type DataType = {
-  id: string;
-  name: string;
-  email: string;
-  city: string;
+    id: string | number;
+    name: string;
+    email: string;
+    city: string;
 };
 
-type ApiResponse<T> = {
-  page: number;
-  limit: number;
-  total: number;
-  data: DataType[];
+type UsersResponse = {
+    total: number;
+    data: DataType[];
+    page?: number;
+    limit?: number;
 };
-
-type ColumnsType<T extends object = object> = TableProps<T>['columns'];
-type TablePaginationConfig = Exclude<GetProp<TableProps, 'pagination'>, boolean>;
 
 interface TableParams {
-  pagination?: TablePaginationConfig;
-  sortField?: SorterResult<any>['field'];
-  sortOrder?: SorterResult<any>['order'];
-  filters?: Parameters<GetProp<TableProps, 'onChange'>>[1];
-  search?: string;
+    pagination?: { current: number; pageSize: number };
+    sortField?: string | any;
+    sortOrder?: string | any;
+    filters?: any;
+    search?: string;
 }
 
-// Hàm Helpers giữ nguyên
-const toURLSearchParams = <T extends Record<string, any>>(record: T) => {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(record)) {
-    params.append(key, value);
-  }
-  return params;
-};
+// --- CONSTANTS ---
+const CHUNK_SIZE = 100;
 
-const getRandomuserParams = (params: TableParams) => {
-  const { pagination, filters, sortField, sortOrder, ...restParams } = params;
-  const result: Record<string, any> = {};
-  result.limit = pagination?.pageSize;
-  result.page = pagination?.current;
-  if (sortField) {
-    result.orderby = sortField;
-    result.order = sortOrder === 'ascend' ? 'asc' : 'desc';
-  }
-  Object.entries(restParams).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      result[key] = value;
-    }
-  });
-  return result;
-};
+export default function UserTableOrganismTan() {
+    const queryClient = useQueryClient();
+    const { ref, inView } = useInView(); 
 
+    const [editingUser, setEditingUser] = useState<DataType | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isPendingUI, startTransition] = useTransition();
+    const [searchText, setSearchText] = useState('');
 
-export default function UserTableOrganism() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const [editingUser, setEditingUser] = useState<DataType | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  // Chỉ giữ lại các state quản lý UI và Params
-  const [isPendingUI, startTransition] = useTransition();
-  const [tableParams, setTableParams] = useState<TableParams>({
-    pagination: {
-      current: 1,
-      pageSize: 10,
-    },
-  });
-  const [searchText, setSearchText] = useState('');
-  const [isModalCreateOpen, setIsModalCreateOpen] = useState(false);
-
-  // search and read query params tu URL de sync voi state
-  const queryString = toURLSearchParams(getRandomuserParams(tableParams)).toString();
-  const { data: queryData, isFetching } = useQuery({
-    queryKey: ['users', queryString],
-    queryFn: () => fetchUsers(queryString),
-  });
-
-  // add new
-  const addMutation = useMutation({
-    mutationFn: createUser,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] }); // Làm mới bảng
-      message.success('Thêm người dùng thành công!');
-      setIsModalOpen(false);
-    },
-  });
-
-  //edit
-  const updateMutation = useMutation({
-    mutationFn: updateUser,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      message.success('Cập nhật thành công!');
-      setIsModalOpen(false);
-      setEditingUser(null);
-    },
-  });
-
-  // delete
-  const deleteMutation = useMutation({
-    mutationFn: deleteUser,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      message.success('Đã xóa người dùng');
-    },
-  });
-
-//   const handleSearch = (value: string) => {
-//     setSearchText(value);
-    
-//     // Reset về trang 1 khi search
-//     setTableParams(prev => ({
-//       ...prev,
-//       search: value,
-//       pagination: {
-//         ...prev.pagination,
-//         current: 1
-//       }
-//     }));
-    
-//     // Cập nhật URL
-//     router.push(`?${queryString}&search=${encodeURIComponent(value)}`);
-//   };
-  const handleSearch = (value: string) => {
-    setTableParams(prev => ({ ...prev, search: value, pagination: { ...prev.pagination, current: 1 } }));
-  };
-  const handleDelete = (id: string) => {
-    Modal.confirm({
-      title: 'Bạn có chắc chắn muốn xóa?',
-      onOk: () => deleteMutation.mutate(id),
+    const [tableParams, setTableParams] = useState<TableParams>({
+        pagination: { current: 1, pageSize: 10 },
     });
-  };
 
-  const handleEdit = (record: DataType) => {
-    setEditingUser(record);
-    setIsModalOpen(true);
-  };
+    // --- 1. INFINITE QUERY LOGIC ---
+    const {
+        data,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+        isFetching,
+    } = useInfiniteQuery<UsersResponse>({
+        queryKey: ['users', tableParams.pagination?.current, tableParams.pagination?.pageSize, tableParams.search, tableParams.sortField, tableParams.sortOrder],
+        queryFn: async ({ pageParam = 0 }) => {
+            const pageSize = Math.max(1, tableParams.pagination?.pageSize || 10);
+            const currentPage = Math.max(1, tableParams.pagination?.current || 1);
+            const baseOffset = (currentPage - 1) * pageSize;
 
-  const handleAddNew = () => {
-    setEditingUser(null);
-    setIsModalOpen(true);
-  };
+            const loadedInCurrentBigPage = pageParam as number;
+            const remaining = pageSize - loadedInCurrentBigPage;
+            const limit = Math.min(CHUNK_SIZE, remaining);
+            const currentOffset = baseOffset + loadedInCurrentBigPage;
 
-  const columns: ColumnsType<DataType> = useMemo(() => [
-    {
-      title: 'ID',
-      dataIndex: 'id', // Lưu ý: theo DataType của bạn là _id, hãy cẩn thận check lại API trả về _id hay id
-      key: 'id',
-      className: 'font-medium text-gray-700',
-    },
-    {
-      title: 'Họ và Tên',
-      dataIndex: 'name',
-      key: 'name',
-      sorter: true,
-      className: 'font-medium text-gray-700',
-    },
-    {
-      title: 'Email',
-      dataIndex: 'email',
-      sorter: true,
-      key: 'email',
-    },
-    {
-      title: 'Thành phố',
-      dataIndex: 'city',
-      key: 'city',
-    },
-    {
-      title: 'Hành động',
-      key: 'action',
-      render: (_: any, record: DataType) => (
-        <ActionButtons 
-          onEdit={() => handleEdit(record)} 
-          onDelete={() => handleDelete(record.id)} 
-        />
-      ),
-    },
-  ], []);
+            const params = new URLSearchParams({
+                offset: currentOffset.toString(),
+                limit: limit.toString(),
+                search: tableParams.search || '',
+                orderby: tableParams.sortField || 'id', // FIX: Đặt mặc định sắp xếp theo id
+                // FIX: Mặc định là 'asc' (tăng dần) nếu không có yêu cầu descend
+                order: tableParams.sortOrder === 'descend' ? 'desc' : 'asc', 
+            });
 
-  const handleTableChange: TableProps<DataType>['onChange'] = (pagination, filters, sorter) => {
-    startTransition(() => {
-      setTableParams({
-        pagination,
-        filters,
-        sortOrder: Array.isArray(sorter) ? undefined : sorter.order,
-        sortField: Array.isArray(sorter) ? undefined : sorter.field,
-        search: searchText,
-      });
-      // Cập nhật URL khi chuyển trang/sort
-      router.push(`?${toURLSearchParams(getRandomuserParams({
-        pagination,
-        filters,
-        sortOrder: Array.isArray(sorter) ? undefined : sorter.order,
-        sortField: Array.isArray(sorter) ? undefined : sorter.field,
-        search: searchText,
-      })).toString()}`);
+            return fetchUsers(params.toString());
+        },
+        initialPageParam: 0,
+        getNextPageParam: (lastPage, allPages) => {
+            const pageSize = Math.max(1, tableParams.pagination?.pageSize || 10);
+            const currentPage = Math.max(1, tableParams.pagination?.current || 1);
+            const baseOffset = (currentPage - 1) * pageSize;
+
+            const loadedInCurrentBigPage = allPages.reduce((sum, page) => sum + (page.data?.length || 0), 0);
+
+            if (loadedInCurrentBigPage >= pageSize) return undefined;
+            if (baseOffset + loadedInCurrentBigPage >= lastPage.total) return undefined;
+
+            return loadedInCurrentBigPage;
+        },
     });
-  };
 
-  return (
-    <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-200">
-      <TableToolbar
-        title="Danh sách người dùng"
-        onSearch={handleSearch} 
-        onAddNew={handleAddNew}
-      />
+    const flatData = useMemo(() => data?.pages.flatMap((page) => page.data) || [], [data]);
 
-      <Table
-        loading={isFetching || deleteMutation.isPending}
-        columns={columns}
-        // 3. Lấy data trực tiếp từ queryData
-        dataSource={queryData?.data || []} 
-        pagination={{
-          ...tableParams.pagination,
-          // 4. Lấy total từ queryData để Antd tính số trang
-          total: queryData?.total || 0, 
-        }}
-        // Dùng isFetching của React Query kết hợp isPending của UI transition
-        onChange={handleTableChange}
-        className="overflow-hidden"
-        rowKey="id" // Sửa lại thành _id khớp với DataType
-      />
-      
-      <CreateOrEditModal 
-        isOpen={isModalOpen}
-        initialData={editingUser}
-        onCancel={() => setIsModalOpen(false)}
-        isLoading={addMutation.isPending || updateMutation.isPending}
-        onSubmit={(values) => {
-          if (editingUser) {
-            // Nếu có editingUser -> Gọi API Update
-            updateMutation.mutate({ ...values, _id: editingUser.id });
-          } else {
-            // Nếu không có -> Gọi API Create
-            addMutation.mutate(values);
-          }
-        }}
-      />
+    useEffect(() => {
+        if (inView && hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+        }
+    }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-    </div>
-  );
+    // --- 2. MUTATIONS ---
+    const addMutation = useMutation({
+        mutationFn: createUser,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+            message.success('Thêm thành công!');
+            setIsModalOpen(false);
+        },
+        onError: (error: any) => message.error(error.message || 'Lỗi khi thêm!'),
+    });
+
+    const updateMutation = useMutation({
+        mutationFn: updateUser,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+            message.success('Cập nhật thành công!');
+            setIsModalOpen(false);
+            setEditingUser(null);
+        },
+        onError: (error: any) => message.error(error.message || 'Lỗi khi cập nhật!'),
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: deleteUser,
+        onMutate: async (id: DataType['id']) => {
+            await queryClient.cancelQueries({ queryKey: ['users'] });
+
+            const previous = queryClient.getQueriesData({ queryKey: ['users'] });
+
+            previous.forEach(([queryKey, cached]) => {
+                if (!cached || typeof cached !== 'object') return;
+                const cachedAny = cached as any;
+                if (!Array.isArray(cachedAny.pages)) return;
+
+                let removed = 0;
+                const nextPages = cachedAny.pages.map((page: any) => {
+                    if (!page?.data || !Array.isArray(page.data)) return page;
+                    const before = page.data.length;
+                    const nextData = page.data.filter((u: any) => String(u.id) !== String(id));
+                    removed += before - nextData.length;
+                    return before === nextData.length ? page : { ...page, data: nextData };
+                });
+
+                if (removed <= 0) return;
+
+                const currentTotal = Number(cachedAny.pages?.[0]?.total ?? cachedAny.total ?? 0);
+                const nextTotal = Math.max(0, currentTotal - removed);
+                const nextPagesWithTotal = nextPages.map((page: any) =>
+                    page && typeof page === 'object' ? { ...page, total: nextTotal } : page
+                );
+
+                queryClient.setQueryData(queryKey, { ...cachedAny, pages: nextPagesWithTotal });
+            });
+
+            return { previous };
+        },
+        onError: (error: any, _id, context) => {
+            context?.previous?.forEach(([queryKey, cached]) => {
+                queryClient.setQueryData(queryKey, cached);
+            });
+            message.error(error?.message || 'Lỗi khi xóa!');
+        },
+        onSuccess: () => {
+            message.success('Đã xóa thành công');
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+        },
+    });
+
+    // --- 3. EVENT HANDLERS ---
+    const handleSearch = (value: string) => {
+        setSearchText(value);
+    };
+
+    // Debounce search để gõ không giật và giảm số lần query
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            startTransition(() => {
+                setTableParams(prev => ({
+                    ...prev,
+                    search: searchText,
+                    pagination: { ...prev.pagination!, current: 1 },
+                }));
+            });
+        }, 300);
+
+        return () => clearTimeout(timeoutId);
+    }, [searchText, startTransition]);
+
+    const handleTableChange: TableProps<DataType>['onChange'] = (pagination, filters, sorter) => {
+        startTransition(() => {
+            const sort = Array.isArray(sorter) ? undefined : sorter;
+            setTableParams({
+                pagination: { current: pagination.current!, pageSize: pagination.pageSize! },
+                filters,
+                sortOrder: sort?.order,
+                sortField: sort?.field as string,
+                search: tableParams.search,
+            });
+        });
+    };
+
+    const handleDelete = useCallback((user: DataType) => {
+        Modal.confirm({
+            title: 'Xác nhận xóa người dùng?',
+            content: (
+                <div className="space-y-1">
+                    <div className="font-medium text-gray-800">{user.name}</div>
+                    <div className="text-gray-500">{user.email}</div>
+                </div>
+            ),
+            okText: 'Xóa',
+            cancelText: 'Hủy',
+            okButtonProps: { danger: true },
+            onOk: () => deleteMutation.mutateAsync(user.id),
+        });
+    }, [deleteMutation]);
+
+    // FIX: Đưa columns ra ngoài render cycle bằng useMemo để chống re-render lag máy.
+    // Bắt buộc phải thêm width cho từng cột khi dùng virtualization.
+    const columns = useMemo(() => [
+        { title: 'ID', dataIndex: 'id', key: 'id', width: 100 },
+        { title: 'Name', dataIndex: 'name', key: 'name', sorter: true, width: 250 },
+        { title: 'Email', dataIndex: 'email', key: 'email', sorter: true, width: 300 },
+        { title: 'City', dataIndex: 'city', key: 'city', width: 200 },
+        {
+            title: 'Action',
+            key: 'action',
+            width: 150,
+            render: (_: number, record: DataType) => (
+                <ActionButtons
+                    onEdit={() => { setEditingUser(record); setIsModalOpen(true); }}
+                    onDelete={() => handleDelete(record)}
+                />
+            ),
+        },
+    ], [handleDelete]);
+
+    const isMainLoading = isFetching && !isFetchingNextPage;
+    const isSoftBusy = isPendingUI || isMainLoading;
+
+    return (
+        <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-200">
+            <TableToolbar
+                title="Danh sách người dùng (Hybrid Load)"
+                onSearch={handleSearch}
+                onAddNew={() => { setEditingUser(null); setIsModalOpen(true); }}
+            />
+
+            <div className={`transition-opacity duration-200 ${isSoftBusy ? 'opacity-70' : 'opacity-100'}`}>
+                <Table
+                    // FIX: Bật prop virtual
+                    virtual
+                    // FIX: Đặt kích thước cố định bằng số để ảo hóa tính toán được
+                    scroll={{ y: 600, x: 1000 }}
+                    // FIX: Sử dụng columns đã bọc useMemo
+                    columns={columns}
+                    dataSource={flatData}
+                    // Loading có delay để tránh nháy khi chuyển trang/sort/search
+                    loading={{ spinning: isMainLoading, delay: 200 }}
+                    pagination={{
+                        ...tableParams.pagination,
+                        total: data?.pages[0]?.total ?? 0,
+                        pageSizeOptions: [5, 10, 50, 100, 1000, 10000, 50000],
+                        showSizeChanger: true,
+                        showTotal: (total) => `Tổng cộng ${total.toLocaleString()} bản ghi`,
+                    }}
+                    onChange={handleTableChange}
+                    rowKey="id"
+                    footer={() => (
+                        <div ref={ref} className="text-center py-2 min-h-[40px]">
+                            {isFetchingNextPage ? <Spin size="small" tip="Loading more..." /> : null}
+                            {!hasNextPage && flatData.length > 0 && <span className="text-gray-400">Đã tải hết</span>}
+                        </div>
+                    )}
+                />
+            </div>
+
+            <CreateOrEditModal
+                isOpen={isModalOpen}
+                initialData={editingUser}
+                onCancel={() => setIsModalOpen(false)}
+                isLoading={addMutation.isPending || updateMutation.isPending}
+                onSubmit={(values) => {
+                    if (editingUser) {
+                        updateMutation.mutate({ ...values, id: editingUser.id });
+                    } else {
+                        addMutation.mutate(values);
+                    }
+                }}
+            />
+        </div>
+    );
 }

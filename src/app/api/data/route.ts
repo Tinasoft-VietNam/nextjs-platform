@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateFakeData } from "@/lib/generateData";
 
-const allData = generateFakeData(100);
+const allData = generateFakeData(1000000);
 
 type ReqUserBody = {
     id?: string | number;
@@ -120,17 +120,51 @@ function isFuzzyFieldMatch(query: string, queryTokens: string[], fieldValue: str
 }
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id")?.trim() || "";
-    const page = Number(searchParams.get("page")) || 1;
-    const limit = Number(searchParams.get("limit")) || 20;
-    const search = normalizeText(searchParams.get("search") || "");
-    const sort = searchParams.get("sort") || "id";
-    const order = searchParams.get("order") || "asc";
+    const limit = Math.max(1, Number(searchParams.get("limit")) || 20);
+    const rawOrder = searchParams.get("order");
+    const order = rawOrder === "desc" ? "desc" : "asc";
 
-    let filtered = [...allData];
-    if(search) {
+    const search = normalizeText(searchParams.get("search") || "");
+    // Support both 'sort' (old) and 'orderby' (current client)
+    const sort = searchParams.get("orderby") || searchParams.get("sort") || "id";
+
+    const offsetParam = searchParams.get("offset");
+    const pageParam = searchParams.get("page");
+    const page = Number(pageParam) || 1;
+
+    const offset = (() => {
+        if (offsetParam === null) return Math.max(0, (page - 1) * limit);
+        const parsed = Number(offsetParam);
+        return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+    })();
+
+    const responsePage = offsetParam !== null ? Math.floor(offset / limit) + 1 : page;
+
+    // Fast-path: default case (no search, sort by id). This avoids copying + sorting 1,000,000 records.
+    if (!search && sort === "id") {
+        const total = allData.length;
+        const start = Math.max(0, Math.min(offset, total));
+        const end = Math.max(start, Math.min(start + limit, total));
+
+        const data =
+            order === "desc"
+                ? allData
+                      .slice(Math.max(0, total - end), Math.max(0, total - start))
+                      .reverse()
+                : allData.slice(start, end);
+
+        return NextResponse.json({
+            page: responsePage,
+            limit,
+            total,
+            data,
+        });
+    }
+
+    let filtered: any[] = allData;
+    if (search) {
         const queryTokens = tokenize(search);
-        filtered = filtered.filter((item) => {
+        filtered = allData.filter((item) => {
             const name = item.name ?? "";
             const email = item.email ?? "";
             return (
@@ -139,24 +173,113 @@ export async function GET(request: NextRequest) {
             );
         });
     }
-    filtered.sort((a, b) => {
-        const aValue = a[sort as keyof ReqUserBody] ?? "";
-        const bValue = b[sort as keyof ReqUserBody] ?? "";
-        if (aValue < bValue) {
-            return order === "asc" ? -1 : 1;
+
+    // If we're sorting by id asc, the filtered array keeps the original order already.
+    if (!(sort === "id" && order === "asc")) {
+        if (filtered === allData) {
+            filtered = [...allData];
         }
-        if (aValue > bValue) {
-            return order === "asc" ? 1 : -1;
-        }
-        return 0;
-    });
-    const start = (page - 1) * limit;
+
+        filtered.sort((a, b) => {
+            const aValue = a[sort as keyof ReqUserBody] ?? "";
+            const bValue = b[sort as keyof ReqUserBody] ?? "";
+            if (aValue < bValue) {
+                return order === "asc" ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return order === "asc" ? 1 : -1;
+            }
+            return 0;
+        });
+    }
+
+    const start = Math.max(0, offset);
     const end = start + limit;
     const data = filtered.slice(start, end);
+
     return NextResponse.json({
-        page,
+        page: responsePage,
         limit,
         total: filtered.length,
         data,
     });
+}
+
+export async function POST(request: NextRequest) {
+    try {
+        const body: ReqUserBody = await request.json();
+        
+        // Tạo user mới với ID ngẫu nhiên hoặc dựa trên timestamp
+        const newUser: any = {
+            id: Date.now().toString(), // Hoặc dùng uuid
+            name: body.name || "",
+            email: body.email || "",
+            city: body.city || "",
+            avatar: body.avatar || "",
+            ...body
+        };
+
+        // Thêm vào đầu mảng để dễ thấy khi fetch dữ liệu (hoặc dùng .push() để thêm vào cuối)
+        allData.unshift(newUser); 
+
+        return NextResponse.json(newUser, { status: 201 });
+    } catch (error) {
+        return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+}
+
+// --- CẬP NHẬT (UPDATE) ---
+export async function PUT(request: NextRequest) {
+    try {
+        const body: ReqUserBody = await request.json();
+        const { id, ...updateFields } = body;
+
+        if (!id) {
+            return NextResponse.json({ error: "Missing user ID" }, { status: 400 });
+        }
+
+        // Tìm index của user cần sửa
+        const index = allData.findIndex((user: any) => String(user.id) === String(id));
+        
+        if (index === -1) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+
+        // Cập nhật dữ liệu vào mảng gốc
+        allData[index] = { ...allData[index], ...updateFields };
+
+        return NextResponse.json(allData[index]);
+    } catch (error) {
+        return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+}
+
+// --- XÓA (DELETE) ---
+export async function DELETE(request: NextRequest) {
+    try {
+        // Lấy ID từ URL (VD: /api/users?id=123)
+        const { searchParams } = new URL(request.url);
+        const id = searchParams.get("id");
+
+        // Nếu client gửi ID qua body thay vì URL params thì dùng cách này:
+        // const body = await request.json();
+        // const id = body.id;
+
+        if (!id) {
+            return NextResponse.json({ error: "Missing user ID" }, { status: 400 });
+        }
+
+        const index = allData.findIndex((user: any) => String(user.id) === String(id));
+        
+        if (index === -1) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+
+        // Xóa phần tử khỏi mảng
+        allData.splice(index, 1);
+
+        return NextResponse.json({ message: "User deleted successfully", id });
+    } catch (error) {
+        return NextResponse.json({ error: "Server error" }, { status: 500 });
+    }
 }

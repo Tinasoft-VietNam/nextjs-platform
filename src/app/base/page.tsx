@@ -1,8 +1,8 @@
-import UserTableOrganism from "@/components/organisms/TablePage/UserTableTanstack"
+import UserTableOrganismTan from "@/components/organisms/TablePage/UserTableTanstack";
 
 const TablePage = () => {
     return (
-        <UserTableOrganism />
+        <UserTableOrganismTan />
     )
 }
 export default TablePage;
