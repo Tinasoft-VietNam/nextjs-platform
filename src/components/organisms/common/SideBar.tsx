@@ -3,6 +3,7 @@
 import { Menu } from 'antd';
 import { UserOutlined, SettingOutlined, HomeOutlined } from '@ant-design/icons';
 import { useRouter, usePathname } from 'next/navigation';
+import { Children } from 'react';
 
 export const SideBar = () => {
     const router = useRouter();
@@ -18,6 +19,10 @@ export const SideBar = () => {
             key: '/users',
             icon: <UserOutlined />,
             label: 'Người dùng',
+            children: [
+                { key: "/users", label: "Danh sách" },
+                { key: "/users/create", label: "Thêm mới" }
+            ]
         },
         {
             key: '/products',
