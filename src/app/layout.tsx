@@ -7,7 +7,7 @@ import '@/styles/colors.css';
 
 import { siteConfig } from '@/constant/config';
 import QueryProvider from '@/providers/QueryProvider';
-
+import { DashboardTemplate } from '@/components/templates/DashboardTemplate';
 // !STARTERCONF Change these default meta
 // !STARTERCONF Look at @/constant/config to change them
 export const metadata: Metadata = {
@@ -58,7 +58,11 @@ export default function RootLayout({
   return (
     <html>
       <body>
-        <QueryProvider>{children}</QueryProvider>
+        <DashboardTemplate>
+          <QueryProvider>
+            {children}
+          </QueryProvider>
+        </DashboardTemplate>
       </body>
     </html>
   );

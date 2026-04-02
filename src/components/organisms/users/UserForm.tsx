@@ -1,52 +1,45 @@
 'use client';
 
-import { Modal, Form, Input } from 'antd';
-import { useModalStore } from '@/store/useModalStore';
+import { Form, Input, Button, Card, Space } from 'antd';
 import { useCreateUser, useUpdateUser } from '@/hooks/queries/useUsers';
+import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-export type User = {
-    id: number;
-    firstName: string;
-    lastName: string;
-    email: string;
-    image: string;
-}
-export const UserFormModal = () => {
-    const { isOpen, closeModal, selectedRecord } = useModalStore();
+import { User } from '@/app/api/user/service';
+
+export const UserForm = ({ initialValues }: { initialValues?: User }) => {
+    const router = useRouter();
     const { mutate: createUser, isPending: isCreating } = useCreateUser();
     const { mutate: updateUser, isPending: isUpdating } = useUpdateUser();
     const [form] = Form.useForm();
 
-    const isEditMode = !!selectedRecord;
+    const isEditMode = !!initialValues;
 
     useEffect(() => {
-        if (isOpen) {
-            if (isEditMode) {
-                form.setFieldsValue(selectedRecord);
-            } else {
-                form.resetFields();
-            }
+        if (initialValues) {
+            form.setFieldsValue(initialValues);
+        } else {
+            form.resetFields();
         }
-    }, [isOpen, selectedRecord, form]);
+    }, [initialValues, form]);
 
     const handleFinish = (values: User) => {
         if (isEditMode) {
-            updateUser({ id: selectedRecord.id, data: values }, {
+            updateUser({ id: initialValues.id, data: values }, {
                 onSuccess: () => {
-                    closeModal();
+                    router.push('/');
                 }
             });
         } else {
             createUser(values, {
                 onSuccess: () => {
-                    form.resetFields();
-                    closeModal();
+                    router.push('/');
                 }
             });
         }
     }
+
     return (
-        <Modal title={isEditMode ? "Cập nhật User" : "Tạo User"} open={isOpen} onCancel={closeModal} onOk={form.submit} confirmLoading={isCreating || isUpdating}>
+        <Card title={isEditMode ? "Cập nhật User" : "Tạo User"} style={{ maxWidth: 600, margin: '0 auto' }}>
             <Form form={form} onFinish={handleFinish} layout='vertical'>
                 <Form.Item name="firstName" label="First Name" rules={[{ required: true }]}>
                     <Input />
@@ -57,10 +50,18 @@ export const UserFormModal = () => {
                 <Form.Item name="email" label="Email" rules={[{ required: true }]}>
                     <Input />
                 </Form.Item>
-                <Form.Item name="image" label="Image" rules={[{ required: true }]}>
+                <Form.Item name="image" label="Image (URL)" rules={[{ required: true }]}>
                     <Input />
                 </Form.Item>
+                <Space>
+                    <Button type="primary" htmlType="submit" loading={isCreating || isUpdating}>
+                        {isEditMode ? "Cập nhật" : "Tạo mới"}
+                    </Button>
+                    <Button onClick={() => router.push('/')}>
+                        Hủy
+                    </Button>
+                </Space>
             </Form>
-        </Modal>
-    )
+        </Card>
+    );
 }

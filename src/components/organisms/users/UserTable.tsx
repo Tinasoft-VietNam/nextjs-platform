@@ -1,7 +1,8 @@
 'use client'
 import { Table, Input, Space } from 'antd';
-import { useUsers, useDeleteUser } from '@/hooks/queries/useUsers';
+import { useUsers } from '@/hooks/queries/useUsers';
 import { Button, Popconfirm } from 'antd';
+import { useDeleteUser } from '@/hooks/queries/useUsers';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 const { Search } = Input;
