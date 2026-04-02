@@ -1,22 +1,16 @@
 // src/app/page.tsx
 'use client';
-
-import { HomeTemplate } from '@/components/templates/HomeTemplate';
-import { HeroSection } from '@/components/organisms/HeroSection';
-import UnderlineLink from '@/components/atoms/links/UnderlineLink';
+import { UserTable } from '@/components/organisms/UserTable';
+import { useModalStore } from '@/store/useModalStore';
+import { Button } from 'antd/es/radio';
+import { UserFormModal } from '@/components/organisms/UserFormModal';
 
 export default function HomePage() {
+  const { openModal } = useModalStore();
   return (
-    <HomeTemplate 
-      hero={<HeroSection />}
-      footer={
-        <>
-          © {new Date().getFullYear()} By{' '}
-          <UnderlineLink href='https://theodorusclarence.com'>
-            Theodorus Clarence
-          </UnderlineLink>
-        </>
-      }
-    />
-  );
+    <div><Button onClick={() => openModal()}>Thêm mới</Button>
+      <UserTable />
+      <UserFormModal />
+    </div>
+  )
 }
