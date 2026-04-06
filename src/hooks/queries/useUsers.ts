@@ -57,3 +57,11 @@ export const useUpdateUser = () => {
         }
     })
 }
+
+export const useUserById = (id: string | number) => {
+    return useQuery({
+        queryKey: ["user", id],
+        queryFn: () => userService.getUserById(id),
+        enabled: !!id,
+    })
+}

@@ -20,7 +20,7 @@ export const SideBar = () => {
             icon: <UserOutlined />,
             label: 'Người dùng',
             children: [
-                { key: "/users", label: "Danh sách" },
+                { key: "/users/", label: "Danh sách" },
                 { key: "/users/create", label: "Thêm mới" }
             ]
         },

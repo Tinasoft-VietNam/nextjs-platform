@@ -25,6 +25,7 @@ export const UserTable = () => {
                     <Popconfirm title="Xóa?" onConfirm={() => deleteUser(record.id)}>
                         <Button danger>Xóa</Button>
                     </Popconfirm>
+                    <Button onClick={() => router.push(`/users/${record.id}`)}>Chi tiết</Button>
                 </div>
             ),
         },

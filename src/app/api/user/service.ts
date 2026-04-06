@@ -7,6 +7,30 @@ export type User = {
     lastName: string;
     email: string;
     image: string;
+    age?: number;
+    gender?: string;
+    phone?: string;
+    username?: string;
+    birthDate?: string;
+    bloodGroup?: string;
+    height?: number;
+    weight?: number;
+    eyeColor?: string;
+    hair?: { color: string; type: string };
+    address?: {
+        address: string;
+        city: string;
+        state: string;
+        country: string;
+        postalCode: string;
+    };
+    company?: {
+        name: string;
+        department: string;
+        title: string;
+    };
+    university?: string;
+    role?: string;
 }
 
 const USERS_CACHE_KEY = "dummy_users_cache";
@@ -72,5 +96,19 @@ export const userService = {
             setLocalUsers(localData);
         }
         return updatedUser;
+    },
+    getUserById: async (id: string | number): Promise<User> => {
+        // Thử lấy từ localStorage trước
+        const localData = getLocalUsers();
+        if (localData) {
+            const user = localData.users.find(u => u.id.toString() === id.toString());
+            if (user) {
+                // Nếu user đã có đủ thông tin thì trả về luôn
+                if (user.age || user.phone) return user;
+            }
+        }
+        // Lấy từ API dummyjson để có đầy đủ thông tin
+        const response = await api.get(`/users/${id}`);
+        return response.data;
     }
 }

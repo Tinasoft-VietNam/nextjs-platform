@@ -6,7 +6,6 @@ export default function UserPage() {
     const router = useRouter();
     return (
         <div style={{ padding: '24px' }}>
-
             <UserTable />
         </div>
     )
