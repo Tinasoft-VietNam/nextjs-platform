@@ -1,19 +1,61 @@
 'use client'
 import { Table, Input, Space } from 'antd';
-import { useUsers } from '@/hooks/queries/useUsers';
+import { useSearchUsers, useUsers } from '@/hooks/queries/useUsers';
 import { Button, Popconfirm } from 'antd';
 import { useDeleteUser } from '@/hooks/queries/useUsers';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 const { Search } = Input;
 export const UserTable = () => {
     const router = useRouter();
-    const { data, isLoading, isError } = useUsers();
+    const searchParams = useSearchParams();
+    const sortBy = searchParams.get('sortBy');
+    const order = searchParams.get('order');
+
+    const { data, isLoading: loadingUsers, isError } = useUsers({
+        sortBy,
+        order
+    });
     const { mutate: deleteUser } = useDeleteUser();
-    const [searchText, setSearchText] = useState('');
+    const pathname = usePathname();
+    const q = searchParams.get('q');
+    const limit = Number(searchParams.get('limit'));
+    const skip = Number(searchParams.get('skip'));
+    const handleSearch = (value: string) => {
+        const params = new URLSearchParams(searchParams);
+        if (value) {
+            params.set('q', value);
+            params.set('limit', '0');
+            params.set('skip', '0');
+        } else {
+            params.delete('q');
+        }
+        router.push(`${pathname}?${params.toString()}`);
+    }
+
+    const handleTableChange = (pagination: any, filters: any, sorter: any) => {
+        const params = new URLSearchParams(searchParams);
+
+        const sortField = sorter.field;
+        const sortOrder = sorter.order;
+
+        if (sortOrder) {
+            params.set('sortBy', sortField as string);
+            params.set('order', sortOrder === 'ascend' ? 'asc' : 'desc');
+        } else {
+            params.delete('sortBy');
+            params.delete('order');
+        }
+
+        router.push(`${pathname}?${params.toString()}`);
+    };
+
+    const { data: searchData, isLoading: loadingSearch } = useSearchUsers({ q: q || "", limit, skip, sortBy, order });
+    const isSearching = !!q;
+    const isLoading = isSearching ? loadingSearch : loadingUsers;
+    const dataSource = isSearching ? searchData?.users : data?.users;
     const columns = [
         { title: 'ID', dataIndex: 'id' },
-        { title: 'Tên', dataIndex: 'firstName', sorter: (a: any, b: any) => a.firstName.localeCompare(b.firstName) },
+        { title: 'Tên', dataIndex: 'firstName', sorter: true },
         { title: 'Họ', dataIndex: 'lastName' },
         { title: 'Email', dataIndex: 'email' },
         { title: 'Avatar', dataIndex: 'image', render: (text: string) => <img src={text} alt="avatar" width={50} height={50} /> },
@@ -32,29 +74,23 @@ export const UserTable = () => {
     ];
 
     if (isError) return <div>Lỗi tải dữ liệu! </div>;
-    let filteredData = data?.users || [];
-    if (searchText) {
-        filteredData = filteredData.filter((user: any) => {
-            const fullName = `${user.firstName} ${user.lastName}`.toLowerCase();
-            return fullName.includes(searchText.toLowerCase());
-        });
-    }
     return (
         <Space orientation='vertical' style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
                 <Search
                     placeholder="Tìm kiếm theo Tên hoặc Họ..."
                     allowClear
-                    onChange={(e) => setSearchText(e.target.value)}
+                    onSearch={handleSearch}
                     style={{ width: 300 }}
                 />
             </div>
             <Table
                 rowKey="id"
                 columns={columns}
-                dataSource={filteredData}
+                dataSource={dataSource}
                 loading={isLoading}
                 pagination={{ pageSize: 10, showSizeChanger: false }}
+                onChange={handleTableChange}
             />
         </Space>
     );

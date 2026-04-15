@@ -7,6 +7,7 @@ import '@/styles/colors.css';
 
 import { siteConfig } from '@/constant/config';
 import QueryProvider from '@/providers/QueryProvider';
+import { AuthProvider } from '@/providers/AuthProvider';
 import { DashboardTemplate } from '@/components/templates/DashboardTemplate';
 // !STARTERCONF Change these default meta
 // !STARTERCONF Look at @/constant/config to change them
@@ -58,11 +59,13 @@ export default function RootLayout({
   return (
     <html>
       <body>
-        <DashboardTemplate>
-          <QueryProvider>
-            {children}
-          </QueryProvider>
-        </DashboardTemplate>
+        <QueryProvider>
+          <AuthProvider>
+            <DashboardTemplate>
+              {children}
+            </DashboardTemplate>
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );

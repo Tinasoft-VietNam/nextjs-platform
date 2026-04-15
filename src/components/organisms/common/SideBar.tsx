@@ -1,13 +1,15 @@
 'use client';
 
 import { Menu } from 'antd';
-import { UserOutlined, SettingOutlined, HomeOutlined } from '@ant-design/icons';
+import { UserOutlined, SettingOutlined, HomeOutlined, LogoutOutlined } from '@ant-design/icons';
+import { useLogout } from '@/hooks/queries/useAuth';
 import { useRouter, usePathname } from 'next/navigation';
 import { Children } from 'react';
 
 export const SideBar = () => {
     const router = useRouter();
     const pathname = usePathname();
+    const logout = useLogout();
 
     const menuItems = [
         {
@@ -28,6 +30,12 @@ export const SideBar = () => {
             key: '/products',
 
             label: 'Sản phẩm',
+        },
+        {
+            key: 'logout',
+            icon: <LogoutOutlined />,
+            label: 'Đăng xuất',
+            danger: true
         }
     ];
 
@@ -40,7 +48,13 @@ export const SideBar = () => {
                 mode="inline"
                 selectedKeys={[pathname]}
                 items={menuItems}
-                onClick={({ key }) => router.push(key)}
+                onClick={({ key }) => {
+                    if (key === 'logout') {
+                        logout();
+                    } else {
+                        router.push(key);
+                    }
+                }}
                 style={{ borderRight: 0 }}
             />
         </div>

@@ -50,25 +50,34 @@ const setLocalUsers = (data: { users: User[] }) => {
 }
 
 export const userService = {
-    getUsers: async () => {
+    getUsers: async ({ sortBy, order }: { sortBy?: string | null, order?: string | null } = {}) => {
+        let usersData;
         const localData = getLocalUsers();
         if (localData) {
-            return localData; // Lấy từ localStorage nếu đã có
+            usersData = localData; // Lấy từ localStorage nếu đã có
+        } else {
+            const response = await api.get("/users?limit=0");
+            usersData = response.data;
+            setLocalUsers(usersData); // Lần đầu lưu vào localStorage
         }
 
-        const response = await api.get("/users?limit=0");
-        const data = response.data;
-        setLocalUsers(data); // Lần đầu lưu vào localStorage
-        return data;
+        const users = [...usersData.users];
+        if (sortBy && order) {
+            users.sort((a: any, b: any) => {
+                const valA = a[sortBy];
+                const valB = b[sortBy];
+                if (valA < valB) return order === 'asc' ? -1 : 1;
+                if (valA > valB) return order === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return { ...usersData, users };
     },
     createUser: async (data: User) => {
         const localData = getLocalUsers() || { users: [] };
-
-        // Tạo ID mới giả lập DB
         const newId = new Date().getTime();
         const newUser = { ...data, id: newId };
 
-        // Thêm vào đầu danh sách
         localData.users = [newUser, ...localData.users];
         setLocalUsers(localData);
 
@@ -98,17 +107,21 @@ export const userService = {
         return updatedUser;
     },
     getUserById: async (id: string | number): Promise<User> => {
-        // Thử lấy từ localStorage trước
         const localData = getLocalUsers();
         if (localData) {
             const user = localData.users.find(u => u.id.toString() === id.toString());
             if (user) {
-                // Nếu user đã có đủ thông tin thì trả về luôn
                 if (user.age || user.phone) return user;
             }
         }
-        // Lấy từ API dummyjson để có đầy đủ thông tin
         const response = await api.get(`/users/${id}`);
         return response.data;
+    },
+    searchUsers: async ({ q, limit, skip, sortBy, order }: { q: string, limit: number, skip: number, sortBy?: string | null, order?: string | null }) => {
+        const params: any = { q, limit, skip };
+        if (sortBy) params.sortBy = sortBy;
+        if (order) params.order = order;
+        const response = await api.get("/users/search", { params })
+        return response.data as { users: User[], total: number, skip: number, limit: number }
     }
 }
